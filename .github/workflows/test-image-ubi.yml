@@ -22,13 +22,17 @@ jobs:
           docker run --rm ${{ inputs.mariadb_image }} mariadbd --version
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
           cache: true
+          cache-dependency-path: go.sum
+
+      - name: Restore automatic Go toolchain selection
+        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
 
       - name: Cluster
         run: |
@@ -47,7 +51,7 @@ jobs:
 
       - name: Tell the MariaDB Folks that failed
         if: ${{ failure() && contains(inputs.mariadb_image, 'mariadb-foundation') }}
-        uses: zulip/github-actions-zulip/send-message@v1
+        uses: zulip/github-actions-zulip/send-message@v2
         with:
           api-key: ${{ secrets.MARIADB_ZULIP_API_KEY }}
           email: "mariadb-operator-bot@mariadb.zulipchat.com"
