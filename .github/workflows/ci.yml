@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Detect no-op changes
         id: noop
-        uses: fkirc/skip-duplicate-actions@v5.3.1
+        uses: fkirc/skip-duplicate-actions@v5.3.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           paths_ignore: '["*.md","**.md.gotmpl","examples/**"]'
@@ -31,18 +31,41 @@ jobs:
     if: ${{ needs.detect-noop.outputs.noop != 'true' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
           cache: true
+          cache-dependency-path: go.sum
 
-      - name: GolangCI Lint
-        uses: golangci/golangci-lint-action@v6
+      - name: Lint cache interval
+        id: lint-cache-interval
+        run: echo "value=$(( $(date +%s) / 604800 ))" >> "$GITHUB_OUTPUT"
+
+      - name: Restore lint cache
+        id: lint-cache
+        uses: actions/cache/restore@v5
         with:
-          version: ${{ env.GOLANGCI_VERSION }}
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-${{ runner.os }}-${{ env.GOLANGCI_VERSION }}-${{ steps.lint-cache-interval.outputs.value }}-${{ hashFiles('go.mod') }}
+          restore-keys: |
+            golangci-lint-${{ runner.os }}-${{ env.GOLANGCI_VERSION }}-${{ steps.lint-cache-interval.outputs.value }}-
+
+      # The Node 24 lint action requires golangci-lint v2; keep our v1 config.
+      - name: GolangCI Lint
+        run: |
+          make golangci-lint GOLANGCI_LINT_VERSION="$GOLANGCI_VERSION"
+          bin/golangci-lint config verify
+          make lint GOLANGCI_LINT_VERSION="$GOLANGCI_VERSION"
+
+      - name: Save lint cache
+        if: ${{ always() && steps.lint-cache.outputs.cache-primary-key != '' && steps.lint-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/golangci-lint
+          key: ${{ steps.lint-cache.outputs.cache-primary-key }}
 
   build:
     name: Build
@@ -51,13 +74,14 @@ jobs:
     if: ${{ needs.detect-noop.outputs.noop != 'true' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
           cache: true
+          cache-dependency-path: go.sum
 
       - name: Build
         run: make build
@@ -72,13 +96,14 @@ jobs:
     if: ${{ needs.detect-noop.outputs.noop != 'true' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
           cache: true
+          cache-dependency-path: go.sum
 
       - name: Test
         run: |
@@ -92,13 +117,14 @@ jobs:
     if: ${{ needs.detect-noop.outputs.noop != 'true' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
           cache: true
+          cache-dependency-path: go.sum
 
       - name: Cluster
         run: |
@@ -120,7 +146,7 @@ jobs:
       CRD_FILE: deploy/charts/mariadb-operator-crds/templates/crds.yaml
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Generate
         run: make gen
